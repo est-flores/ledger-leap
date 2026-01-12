@@ -61,6 +61,10 @@ NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
 NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
 NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=G-XXXXXXXXXX
 
+# Pagalo Payment API
+PAGALO_API_KEY=your_pagalo_api_key
+PAGALO_API_URL=https://apitest.pagalo.co/v1
+
 # App Configuration
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
