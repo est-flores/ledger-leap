@@ -11,10 +11,10 @@ This is an early prototype built in January 2026. It is not deployed and not in 
 - Sign-up and sign-in with Supabase Auth (email and password). A middleware refreshes the session and the dashboard redirects to sign-in when there is no user.
 - A Postgres schema (`supabase/migrations/001_initial_schema.sql`) with `profiles` and `conversions` tables, row-level security on both, a trigger that creates a profile with 3 credits when a user signs up, and `add_credits` and `decrement_credit` functions.
 - Uploading a PDF (or a PNG, JPG or WEBP image, up to 10 MB) from the browser to the `raw-files` Supabase Storage bucket, and recording a row in `conversions`.
-- The `process-statement` Supabase edge function. It deducts one credit, downloads the uploaded file, sends it to the OpenAI chat completions API with the `gpt-4o` model, parses the returned transactions (date, description, withdrawal, deposit, balance), builds an XLSX file with ExcelJS, uploads it to the `results` bucket, marks the conversion as completed and returns a signed download URL valid for one hour.
-- A dashboard that lists the user's 20 most recent conversions and shows their credit balance.
+- The `process-statement` Supabase edge function. It deducts one credit, downloads the uploaded file, sends it to the OpenAI chat completions API with the `gpt-4o` model, parses the returned transactions (date, description, withdrawal, deposit, balance), builds an XLSX file with ExcelJS, uploads it to the `results` bucket, marks the conversion as completed and returns a signed download URL valid for one hour. PDFs are sent to OpenAI as a base64 `image_url`, which OpenAI accepts only for image formats, so PDF input is rejected as currently written. Image uploads go through the same path.
+- A dashboard that lists the user's 20 most recent conversions and shows their credit balance. The Download button in the history table has no handler, and neither page uses the signed URL the edge function returns, so a finished spreadsheet cannot be downloaded from the UI yet.
 
-Credits can only be added by hand, for example with `SELECT add_credits('user-uuid', 10);` in the Supabase SQL editor.
+There is no way to buy credits. They are added by hand, for example with `SELECT add_credits('user-uuid', 10);` in the Supabase SQL editor.
 
 ## Not built yet
 
@@ -74,7 +74,7 @@ You need Node.js, a Supabase project, the Supabase CLI and an OpenAI API key.
    supabase db push
    ```
 
-   Then create two private storage buckets in the Supabase dashboard: `raw-files` and `results`.
+   Then create two private storage buckets in the Supabase dashboard, `raw-files` and `results`, and add storage policies that let signed-in users upload to `raw-files`. Without them the browser upload is denied. The commented-out policies at the end of the migration are a starting point.
 
 4. Deploy the edge function:
 
