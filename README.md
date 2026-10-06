@@ -1,156 +1,90 @@
 # LedgerLeap
 
-A secure, pay-per-use SaaS that converts PDF Bank Statements into formatted
-Excel/CSV files using AI.
+A web app that turns PDF bank statements into Excel files, using GPT-4o Vision to extract the transactions.
 
-![Next.js](https://img.shields.io/badge/Next.js-15-black?style=flat-square&logo=next.js)
-![Supabase](https://img.shields.io/badge/Supabase-Backend-green?style=flat-square&logo=supabase)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?style=flat-square&logo=typescript)
+## Status
 
-## Features
+This is an early prototype built in January 2026. It is not deployed and not in production.
 
-- 🚀 **AI-Powered Extraction** - Uses GPT-4o Vision to extract transactions from
-  bank statements
-- 📊 **Excel Output** - Get clean, formatted XLSX files with proper column
-  structure
-- 🔐 **Secure** - Row Level Security, encrypted storage, auto-deletion after 24h
-- 💳 **Credit System** - Pay-per-use model with manual credit top-up
+## What works
 
-## Tech Stack
+- Sign-up and sign-in with Supabase Auth (email and password). A middleware refreshes the session and the dashboard redirects to sign-in when there is no user.
+- A Postgres schema (`supabase/migrations/001_initial_schema.sql`) with `profiles` and `conversions` tables, row-level security on both, a trigger that creates a profile with 3 credits when a user signs up, and `add_credits` and `decrement_credit` functions.
+- Uploading a PDF (or a PNG, JPG or WEBP image, up to 10 MB) from the browser to the `raw-files` Supabase Storage bucket, and recording a row in `conversions`.
+- The `process-statement` Supabase edge function. It deducts one credit, downloads the uploaded file, sends it to the OpenAI chat completions API with the `gpt-4o` model, parses the returned transactions (date, description, withdrawal, deposit, balance), builds an XLSX file with ExcelJS, uploads it to the `results` bucket, marks the conversion as completed and returns a signed download URL valid for one hour.
+- A dashboard that lists the user's 20 most recent conversions and shows their credit balance.
 
-- **Frontend:** Next.js 15 (App Router), TypeScript, Tailwind CSS, Shadcn/UI
-- **Backend:** Supabase (Auth, Postgres, Storage, Edge Functions)
-- **AI:** OpenAI GPT-4o Vision
-- **Excel:** ExcelJS
+Credits can only be added by hand, for example with `SELECT add_credits('user-uuid', 10);` in the Supabase SQL editor.
 
-## Getting Started
+## Not built yet
 
-### Prerequisites
+- Automatic deletion of uploaded files. Uploaded statements and generated spreadsheets stay in storage until removed by hand.
+- Storage access policies. The bucket policies in the migration are commented out, so the `raw-files` and `results` buckets have to be created and secured by hand.
+- Payments. `src/lib/services/pagalo.ts` is a standalone typed client for Guatemala's Págalo payment gateway and is not yet wired into the app.
 
-- Node.js 18+
-- Supabase account
-- OpenAI API key
+## Stack
 
-### 1. Clone & Install
+- Next.js 16.1.1 (App Router) with React 19.2.3
+- TypeScript 5
+- Tailwind CSS 4, Radix UI primitives, lucide-react icons
+- Supabase: `@supabase/supabase-js` 2.89 and `@supabase/ssr` 0.8 (Auth, Postgres, Storage, Edge Functions)
+- OpenAI GPT-4o, called from a Deno edge function
+- ExcelJS 4.4
+- react-dropzone 14.3 for uploads
+- Firebase 12.7 for optional analytics
 
-```bash
-git clone <your-repo-url>
-cd ledger-leap
-npm install
-```
+## Running it locally
 
-### 2. Environment Variables
+You need Node.js, a Supabase project, the Supabase CLI and an OpenAI API key.
 
-Create a `.env.local` file:
+1. Install dependencies:
 
-```env
-# Supabase Configuration
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+   ```bash
+   npm install
+   ```
 
-# OpenAI API
-OPENAI_API_KEY=your_openai_api_key
+2. Copy `.env.example` to `.env.local` and fill in the values. The Next.js app reads:
 
-# Firebase Analytics (optional - events log to console in dev mode)
-NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
-NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=G-XXXXXXXXXX
+   ```env
+   NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+   SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key
+   NEXT_PUBLIC_APP_URL=http://localhost:3000
 
-# Pagalo Payment API
-PAGALO_API_KEY=your_pagalo_api_key
-PAGALO_API_URL=https://apitest.pagalo.co/v1
+   # Optional, for Firebase Analytics
+   NEXT_PUBLIC_FIREBASE_API_KEY=your-firebase-api-key
+   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+   NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-firebase-project-id
+   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
+   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your-sender-id
+   NEXT_PUBLIC_FIREBASE_APP_ID=your-firebase-app-id
+   NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=G-XXXXXXXXXX
 
-# App Configuration
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-```
+   # Only read by the unused Pagalo client
+   PAGALO_API_KEY=your-pagalo-api-key
+   PAGALO_API_URL=https://apitest.pagalo.co/v1
+   ```
 
-### 3. Database Setup
+   The edge function reads `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, which Supabase provides automatically, and `OPENAI_API_KEY`, which you set as a secret in step 4.
 
-1. Go to your Supabase Dashboard → SQL Editor
-2. Copy and run the contents of `supabase/migrations/001_initial_schema.sql`
-3. Create storage buckets:
-   - `raw-files` (private) - for uploaded PDFs
-   - `results` (private) - for generated XLSX files
+3. Apply the migration. Either run `supabase/migrations/001_initial_schema.sql` in the Supabase SQL editor, or link the project and push it:
 
-### 4. Deploy Edge Function
+   ```bash
+   supabase link --project-ref your-project-ref
+   supabase db push
+   ```
 
-```bash
-# Install Supabase CLI
-npm install -g supabase
+   Then create two private storage buckets in the Supabase dashboard: `raw-files` and `results`.
 
-# Login to Supabase
-supabase login
+4. Deploy the edge function:
 
-# Link your project
-supabase link --project-ref your-project-ref
+   ```bash
+   supabase secrets set OPENAI_API_KEY=your-openai-api-key
+   supabase functions deploy process-statement
+   ```
 
-# Set secrets
-supabase secrets set OPENAI_API_KEY=your_openai_key
+5. Start the dev server and open http://localhost:3000:
 
-# Deploy function
-supabase functions deploy process-statement
-```
-
-### 5. Run Development Server
-
-```bash
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000)
-
-## Project Structure
-
-```
-ledger-leap/
-├── src/
-│   ├── app/                    # Next.js App Router
-│   │   ├── (auth)/             # Auth pages (sign-in, sign-up)
-│   │   ├── dashboard/          # Protected dashboard
-│   │   ├── layout.tsx          # Root layout with providers
-│   │   ├── page.tsx            # Landing page
-│   │   ├── sitemap.ts          # SEO sitemap
-│   │   └── robots.ts           # SEO robots.txt
-│   ├── components/             # React components
-│   │   ├── ui/                 # Shadcn/UI components
-│   │   ├── upload-zone.tsx     # File upload component
-│   │   ├── navbar.tsx          # Navigation bar
-│   │   └── footer.tsx          # Footer
-│   ├── context/                # React contexts
-│   │   └── auth-context.tsx    # Auth state management
-│   ├── lib/                    # Utilities
-│   │   └── supabase/           # Supabase clients
-│   └── types/                  # TypeScript types
-│       └── database.types.ts   # Supabase schema types
-├── supabase/
-│   ├── migrations/             # SQL migrations
-│   └── functions/              # Edge Functions
-│       └── process-statement/  # PDF processing function
-└── middleware.ts               # Auth middleware
-```
-
-## Credit Management
-
-Credits are managed manually via SQL:
-
-```sql
--- Add 10 credits to a user
-SELECT add_credits('user-uuid-here', 10);
-
--- Check user's balance
-SELECT credits_balance FROM profiles WHERE id = 'user-uuid-here';
-```
-
-## Storage Lifecycle (Manual Setup)
-
-For auto-deletion of files after 24h, set up a scheduled Edge Function or use
-Supabase Dashboard to configure lifecycle rules on the `raw-files` bucket.
-
-## License
-
-MIT
+   ```bash
+   npm run dev
+   ```

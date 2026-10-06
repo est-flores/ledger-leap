@@ -5,6 +5,8 @@ import { AuthProvider } from "@/context/auth-context";
 import { AnalyticsProvider } from "@/components/analytics-provider";
 import { Toaster } from "@/components/ui/sonner";
 
+const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
@@ -29,7 +31,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://ledgerleap.com",
+    url: appUrl,
     title: "LedgerLeap - Convert Bank Statements to Excel",
     description:
       "Instantly convert your PDF bank statements to formatted Excel spreadsheets using AI.",
